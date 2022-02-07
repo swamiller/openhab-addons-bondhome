@@ -1,0 +1,149 @@
+# Gardena Binding
+
+This is the binding for [Gardena smart system](https://www.gardena.com/smart).
+This binding allows you to integrate, view and control Gardena smart system devices in the openHAB environment.
+
+## Supported Things
+
+Devices connected to Gardena smart system, currently:
+
+| Thing type               | Name                                               |
+|--------------------------|----------------------------------------------------|
+| bridge                   | smart Gateway                                      |
+| mower                    | smart SILENO(+), SILENO city, SILENO life Mower    |
+| sensor                   | smart Sensor                                       |
+| pump                     | smart Pressure Pump                                |
+| power                    | smart Power Adapter                                |
+| water_control            | smart Water Control                                |
+| irrigation_control       | smart Irrigation Control                           |
+
+## Discovery
+
+An account must be specified, all things for an account are discovered automatically.
+
+## Account Configuration
+
+There are several settings for an account:
+
+| Name                  | Required | Description                                                                                         |
+|-----------------------|----------|-----------------------------------------------------------------------------------------------------|
+| **email**             | yes      | The email address for logging into the Gardena smart system                                         |
+| **password**          | yes      | The password for logging into the Gardena smart system                                              |
+| **apiKey**            | yes      | The Gardena smart system integration API key                                                    |
+| **connectionTimeout** | no       | The timeout in seconds for connections to Gardena smart system integration API (default = 10)       |
+
+### Obtaining your API Key
+
+1. Goto https://developer.husqvarnagroup.cloud/, sign in using your GARDENA smart system account and accept the terms of use
+2. Create and save a new application via the 'Create application' button
+3. Connect both _Authentication API_ and _GARDENA smart system API_ to your application via the 'Connect new API' button
+4. Copy the application key to use with this binding as _apiKey_
+
+## Examples
+
+### Things
+
+Minimal Thing configuration:
+
+```java
+Bridge gardena:account:home [ email="...", password="...", apiKey="..." ]
+```
+
+Configuration of multiple bridges:
+
+```java
+Bridge gardena:account:home1 [ email="...", password="...", apiKey="..." ]
+Bridge gardena:account:home2 [ email="...", password="...", apiKey="..." ]
+```
+
+Once a connection to an account is established, connected Things are discovered automatically.
+
+Alternatively, you can manually configure Things:
+
+```java
+Bridge gardena:account:home [ email="...", password="...", apiKey="..." ]
+{
+  Thing mower myMower [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+  Thing water_control myWaterControl [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+  Thing sensor mySensor [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+  Thing pump myEPP [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+  Thing power myPowerSocket [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+  Thing irrigation_control myIrrigationControl [ deviceId="c81ad682-6e45-42ce-bed1-6b4eff5620c8" ]
+}
+```
+
+### Items
+
+In the items file, you can link items to channels of your Things:
+
+```java
+Number Mower_Battery_Level "Battery [%d %%]" {channel="gardena:mower:home:myMower:common#batteryLevel"}
+```
+
+### Sensor refresh
+
+Sensor refresh commands are not yet supported by the Gardena smart system integration API.
+
+### Example configuration
+
+```
+// smart Water Control
+String  WC_Valve_Activity                 "Valve Activity" { channel="gardena:water_control:home:myWateringComputer:valve#activity" }
+Number  WC_Valve_Duration                 "Last Watering Duration [%d min]" { channel="gardena:water_control:home:myWateringComputer:valve#duration" }
+
+Number  WC_Valve_cmd_Duration             "Command Duration [%d min]" { channel="gardena:water_control:home:myWateringComputer:valve_commands#commandDuration" }
+Switch  WC_Valve_cmd_OpenWithDuration     "Watering Timer [%d min]" { channel="gardena:water_control:home:myWateringComputer:valve_commands#start_seconds_to_override" }
+Switch  WC_Valve_cmd_CloseValve           "Stop Switch" { channel="gardena:water_control:home:myWateringComputer:valve_commands#stop_until_next_task" }
+
+openhab:status WC_Valve_Duration // returns the duration of the last watering request if still active, or 0
+openhab:status WC_Valve_Activity // returns the current valve activity  (CLOSED|MANUAL_WATERING|SCHEDULED_WATERING)
+```
+
+All channels are read-only, except the command group and the lastUpdate timestamp
+
+```
+openhab:send WC_Valve_cmd_Duration.sendCommand(10) // set the duration for the command to 10min
+openhab:send WC_Valve_cmd_OpenWithDuration.sendCommand(ON) // start watering
+openhab:send WC_Valve_cmd_CloseValve.sendCommand(ON) // stop any active watering
+```
+
+If you send a REFRESH command to the last update timestamp (no matter which thing), **ALL** items from **ALL** things are updated
+```
+DateTime LastUpdate "LastUpdate [%1$td.%1$tm.%1$tY %1$tH:%1$tM]" { channel="gardena:water_control:home:myWateringComputer:common#lastUpdate_timestamp" }
+
+// refresh ALL items
+openhab:send LastUpdate REFRESH
+```
+
+### Debugging and Tracing
+
+If you want to see what's going on in the binding, switch the loglevel to TRACE in the Karaf console
+
+```
+log:set TRACE org.openhab.binding.gardena
+```
+
+Set the logging back to normal
+
+```
+log:set INFO org.openhab.binding.gardena
+```
+
+**Notes and known limitations:** 
+When the binding sends a command to a device, it communicates only with the Gardena smart system integration API.
+It has no control over whether the command is sent from the online service via your gateway to the device.
+It is the same as if you send the command in the Gardena App.
+
+Schedules, sensor-refresh commands, irrigation control master valve configuration etc. are not supported.
+This binding relies on the GARDENA smart system integration API.
+Further API documentation: https://developer.1689.cloud/apis/GARDENA+smart+system+API
+
+###Troubleshooting
+Occasionally it can happen that the API key is no longer valid.
+
+```
+HTTP protocol violation: Authentication challenge without WWW-Authenticate header
+```
+
+If this error message appears in the log file, simply renew or delete/create a new API key as described in 'Obtaining your API Key' and restart openHAB.
+
